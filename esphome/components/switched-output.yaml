@@ -11,5 +11,5 @@ switch:
   - platform: gpio
     id: ${id}
     name: ${name}
-    pin: ${ ["GPIO21", "GPIO38", "GPIO47", "GPIO1"][channel - 1] }
+    pin: ${ ["GPIO17", "GPIO10", "GPIO9", "GPIO8"][channel - 1] }
     restore_mode: ${restore_mode}

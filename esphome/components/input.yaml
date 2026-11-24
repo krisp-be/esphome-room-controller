@@ -19,7 +19,7 @@ binary_sensor:
     name: ${name}
     device_class: ${device_class}
     pin:
-      number: ${ ["GPIO4", "GPIO13", "GPIO14", "GPIO44", "GPIO43"][channel - 1] }
+      number: ${ ["GPIO7", "GPIO6", "GPIO5", "GPIO44", "GPIO43"][channel - 1] }
       inverted: ${inverted}
       mode:
         input: true

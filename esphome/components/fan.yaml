@@ -16,7 +16,7 @@ defaults:
 output:
   - platform: ledc
     id: ${id}_pwm
-    pin: ${ ["GPIO9", "GPIO10"][channel - 1] }
+    pin: ${ ["GPIO4", "GPIO14"][channel - 1] }
     frequency: ${frequency}
     inverted: true
     min_power: ${min_power}

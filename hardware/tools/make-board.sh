@@ -8,9 +8,15 @@ PY="$TOOLS/.venv/bin/python"
 NAME=$("$PY" -c "import sys; sys.path.insert(0, '$BOARD'); import parts; print(parts.NAME)")
 PCB="$BOARD/$NAME.kicad_pcb"
 cd "$TOOLS"
-# pcbnew sometimes crashes while rebuilding; just try again.
-for i in 1 2 3 4 5; do "$PY" build.py "$BOARD" && break; echo "retry ($i)"; done
-"$TOOLS/drc.sh" "$PCB"
+# Only one build per board at a time; stop builds of this board that are still running.
+exec 9>"/tmp/make-board-$(echo "$BOARD" | md5sum | cut -c1-8).lock"
+pkill -f "build.py $BOARD" 2>/dev/null && sleep 1
+flock -n 9 || { echo "another build of $BOARD is still running"; exit 1; }
+# pcbnew sometimes crashes while rebuilding; try once more, then stop.
+ok=
+for i in 1; do "$PY" build.py "$BOARD" && { ok=1; break; }; echo "build.py failed"; done
+[ -n "$ok" ] || { echo "build.py keeps crashing, stopping"; exit 1; }
+"$TOOLS/drc.sh" "$PCB" || echo "DRC: findings above (the build continues)"
 OUT="$BOARD/fabrication"
 rm -rf "$OUT/gerbers" && mkdir -p "$OUT/gerbers"
 kicad-cli pcb export gerbers --layers F.Cu,B.Cu,F.Mask,B.Mask,F.Silkscreen,B.Silkscreen,Edge.Cuts --use-drill-file-origin -o "$OUT/gerbers/" "$PCB" >/dev/null

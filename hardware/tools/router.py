@@ -313,7 +313,8 @@ def route(board, verbose=True):
 
 
 def planes(board):
-    """Zones from P.PLANES (net, layer "F"/"B", polygon), pads fully connected (high current),
+    """Zones from P.PLANES (net, layer "F"/"B", polygon), pads fully connected (high current)
+    unless P.PLANE_THERMAL is set,
     plus copper keep-outs around the mounting holes."""
     for name, layer, pts in P.PLANES:
         z = pcbnew.ZONE(board)
@@ -321,7 +322,11 @@ def planes(board):
         z.SetNet(board.FindNet(name))
         z.SetLocalClearance(MM(0.4))
         z.SetMinThickness(MM(0.25))
-        z.SetPadConnection(pcbnew.ZONE_CONNECTION_FULL)
+        if getattr(P, "PLANE_THERMAL", False):
+            z.SetPadConnection(pcbnew.ZONE_CONNECTION_THERMAL)
+            z.SetThermalReliefGap(MM(0.4)); z.SetThermalReliefSpokeWidth(MM(0.5))
+        else:
+            z.SetPadConnection(pcbnew.ZONE_CONNECTION_FULL)
         o = z.Outline(); o.NewOutline()
         for x, y in pts:
             o.Append(MM(x), MM(y))

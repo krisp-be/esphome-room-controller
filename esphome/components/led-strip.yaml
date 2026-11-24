@@ -20,7 +20,7 @@ light:
     id: ${id}
     name: ${name}
     internal: ${internal}
-    pin: ${ ["GPIO8", "GPIO7", "GPIO6", "GPIO5"][channel - 1] }
+    pin: ${ ["GPIO47", "GPIO21", "GPIO18", "GPIO38"][channel - 1] }
     chipset: ${chipset}
     rgb_order: ${rgb_order}
     is_rgbw: ${is_rgbw}

@@ -7,9 +7,14 @@
 The output is <board-dir>/<parts.NAME>.kicad_pcb.
 """
 import importlib.util
+import json
+import shutil
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
+import nodump  # noqa: F401  (before pcbnew: no crash dumps)
 import pcbnew
 
 import router
@@ -142,38 +147,63 @@ def build_board(P):
     return board
 
 
+def route_once(board_dir, priority, out, result):
+    """One routing attempt in this process: build, route with the given priority, planes, save, fill.
+    Writes the failed connections as JSON to `result`."""
+    P = load_parts(board_dir)
+    P.PRIORITY[:] = priority + [n for n in P.PRIORITY if n not in priority]
+    router.P = P
+    board = build_board(P)
+    failed = router.route(board, verbose=False)
+    router.planes(board)
+    pcbnew.SaveBoard(str(out), board)
+    router.fill(out)
+    Path(result).write_text(json.dumps(failed))
+
+
 def main():
     board_dir = Path(sys.argv[1]).resolve()
     P = load_parts(board_dir)
     router.P = P
     out = board_dir / f"{P.NAME}.kicad_pcb"
-    board = build_board(P)
-    if "--place" not in sys.argv:
-        # Nets that fail move to the front and the whole board is routed again.
-        best = None
-        keep = [board]   # keep old boards alive: pcbnew sometimes crashes when they are freed
-        for attempt in range(8):
-            failed = router.route(board, verbose=False)
-            if best is None or len(failed) < len(best[1]):
-                best = (board, failed)
-            if not failed:
-                break
-            print(f"attempt {attempt + 1}: {len(failed)} failed, retrying with priority", flush=True)
-            for name, _ in failed:
-                if name in P.PRIORITY:
-                    P.PRIORITY.remove(name)
-                P.PRIORITY.insert(0, name)
-            board = build_board(P)
-            keep.append(board)
-        board, failed = best
-        if failed:
-            print("best attempt, still not routed:", failed)
-        router.planes(board)
-    pcbnew.SaveBoard(str(out), board)
-    if "--place" not in sys.argv:
-        router.fill(out)
+    if "--place" in sys.argv:
+        pcbnew.SaveBoard(str(out), build_board(P))
+        print("saved:", out)
+        return
+    if "--once" in sys.argv:
+        route_once(board_dir, json.loads(sys.argv[sys.argv.index("--once") + 1]), out,
+                   sys.argv[sys.argv.index("--result") + 1])
+        return
+    # Every attempt runs in a fresh process (pcbnew crashes when boards are rebuilt in one process).
+    # Nets that fail move to the front and the board is routed again.
+    priority, best = [], None
+    tmp = Path(tempfile.mkdtemp(prefix="route-"))
+    for attempt in range(1, ATTEMPTS + 1):
+        pcb, result = tmp / f"try{attempt}.kicad_pcb", tmp / f"try{attempt}.json"
+        r = subprocess.run([sys.executable, __file__, str(board_dir), "--once", json.dumps(priority), "--result", str(result)])
+        if r.returncode != 0 or not result.exists():
+            print(f"attempt {attempt}: crashed (exit {r.returncode}), trying again", flush=True)
+            continue
+        failed = json.loads(result.read_text())
+        shutil.copy(out, pcb)
+        if best is None or len(failed) < len(best[1]):
+            best = (pcb, failed)
+        if not failed:
+            break
+        print(f"attempt {attempt}: {len(failed)} failed: {failed}", flush=True)
+        for name, _ in failed:
+            if name in priority:
+                priority.remove(name)
+            priority.insert(0, name)
+    if best is None:
+        sys.exit("all attempts crashed")
+    shutil.copy(best[0], out)
+    if best[1]:
+        print("best attempt, still not routed:", best[1])
     print("saved:", out)
 
+
+ATTEMPTS = 8
 
 if __name__ == "__main__":
     main()

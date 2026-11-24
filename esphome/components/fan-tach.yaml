@@ -13,7 +13,7 @@ sensor:
     id: ${id}
     name: ${name}
     pin:
-      number: ${ ["GPIO17", "GPIO18"][channel - 1] }
+      number: ${ ["GPIO1", "GPIO13"][channel - 1] }
       mode:
         input: true
         pullup: true

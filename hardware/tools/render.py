@@ -8,6 +8,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle, Polygon, Rectangle
+import nodump  # noqa: F401  (before pcbnew: no crash dumps)
 import pcbnew
 
 TM = pcbnew.ToMM

@@ -11,7 +11,7 @@ defaults:
 output:
   - platform: ledc
     id: ${id}_pwm
-    pin: ${ ["GPIO21", "GPIO38", "GPIO47", "GPIO1"][channel - 1] }
+    pin: ${ ["GPIO17", "GPIO10", "GPIO9", "GPIO8"][channel - 1] }
     frequency: ${frequency}
 
 light:

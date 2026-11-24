@@ -32,8 +32,12 @@
 - **Mains EC fan with a PWM input** (e.g. Ruck EM..EC 02): mains through a relay module (relay
   input on an IO pin), PWM_In and its GND on `PWM` / `GNDiso`, **GND bridge open**. The relay
   switches the fan off completely; the PWM sets the speed.
-- **4-pin computer fans:** 12V, GND, TACH and PWM to the FAN terminals, **GND bridge fitted**,
-  25 kHz. Several fans in parallel are fine (watch the 12 V current); connect only one tach wire.
+- **4-pin computer fans:** V+, GND, TACH and PWM to the FAN terminals, **GND bridge fitted**,
+  25 kHz. Several fans in parallel are fine (watch the current, below 1 A per channel); connect only
+  one tach wire.
+- **Fan voltage jumper (FAN V, one per channel):** sets V+ on the FAN terminal. Cap on **12V**
+  (default) for ordinary 12 V computer fans; on **24V** only for 24 V PWM fans such as the Noctua
+  industrialPPC-24V. **A 12 V fan burns out on 24 V**, so check the jumper before connecting.
 - **3-pin or plain 24 V fans:** on a MOSFET output (OUT 1..4) as a dimmer or a switch.
 
 ## Sensors
