@@ -72,15 +72,18 @@ def label(fp, t, x, y, layer=pcbnew.F_SilkS, h=1.0):
 def custom_footprint(board, name):
     fp = pcbnew.FOOTPRINT(board)
     if name == "MINI560":
-        # Placeholder: module about 30 x 18 mm, input (IN+, GND) left, output (OUT+, GND) right,
-        # two holes at 2.54 mm each. MEASURE the real module and adjust.
-        pad_tht(fp, "1", 2.0, 7.73, shape="square")
-        pad_tht(fp, "2", 2.0, 10.27)
-        pad_tht(fp, "3", 28.0, 7.73, shape="square")
-        pad_tht(fp, "4", 28.0, 10.27)
-        rectangle(fp, 0, 0, 30, 18, pcbnew.F_SilkS)
-        rectangle(fp, -0.25, -0.25, 30.25, 18.25, pcbnew.F_CrtYd, 0.05)
-        label(fp, "IN+", 5.2, 7.73, h=0.9); label(fp, "OUT", 24.8, 7.73, h=0.9)
+        # Mini560-PRO (measured): 33 x 18.2 mm. Four connections in the corners, each with two holes
+        # 2.3 mm apart (2 mm from the short edge, 2 and 4.3 mm from the long edge), plus a half hole.
+        # Pads: 1 = IN+, 2 = IN-, 3 = OUT+, 4 = OUT-; "+" along the long edge y = 0 (CHECK on the module).
+        # Both holes of a connection get a pad on the same net: one header pin per connection is enough.
+        for num, x, ys in (("1", 2.0, (2.0, 4.3)), ("2", 2.0, (16.2, 13.9)),
+                           ("3", 31.0, (2.0, 4.3)), ("4", 31.0, (16.2, 13.9))):
+            for k, y in enumerate(ys):
+                pad_tht(fp, num, x, y, d=1.7, drill=1.0, shape="square" if (num in "13" and k == 0) else "round")
+        rectangle(fp, 0, 0, 33, 18.2, pcbnew.F_SilkS)
+        rectangle(fp, -0.25, -0.25, 33.25, 18.45, pcbnew.F_CrtYd, 0.05)
+        label(fp, "IN+", 5.6, 2.0, h=0.9); label(fp, "IN-", 5.6, 16.2, h=0.9)
+        label(fp, "OUT+", 26.8, 2.0, h=0.9); label(fp, "OUT-", 26.8, 16.2, h=0.9)
     elif name == "SIP4":
         # Hi-Link HLK-1D0505A / B0505S: 1 GND, 2 VIN | 3 0V, 4 +VO, pitch 2.54. CHECK the datasheet.
         for i in range(4):
@@ -114,6 +117,12 @@ def build_board(P):
 
     for ref, (lib, name, x, y, rot, pads, value) in P.PARTS.items():
         fp = pcbnew.FootprintLoad(P.LIB + lib + ".pretty", name) if lib else custom_footprint(board, name)
+        drill = getattr(P, "DRILLS", {}).get(name)   # bigger holes for parts with thick or flat legs
+        if drill:
+            for p in fp.Pads():
+                p.SetDrillSize(v(drill, drill))
+                if p.GetSize().x < drill + 0.8:
+                    p.SetSize(v(drill + 0.8, drill + 0.8))
         fp.SetReference(ref)
         fp.SetValue(value)
         fp.Value().SetVisible(False)

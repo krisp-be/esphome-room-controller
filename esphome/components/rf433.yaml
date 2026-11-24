@@ -17,20 +17,20 @@ binary_sensor:
   - platform: gpio
     id: remote_a
     name: Remote button A
-    pin: {mcp23xxx: expander, number: 15}   # D0 on B7
+    pin: {mcp23xxx: expander, number: 12}   # D0 on B4
     filters: [delayed_on: 20ms]
   - platform: gpio
     id: remote_b
     name: Remote button B
-    pin: {mcp23xxx: expander, number: 14}   # D1 on B6
+    pin: {mcp23xxx: expander, number: 13}   # D1 on B5
     filters: [delayed_on: 20ms]
   - platform: gpio
     id: remote_c
     name: Remote button C
-    pin: {mcp23xxx: expander, number: 13}   # D2 on B5
+    pin: {mcp23xxx: expander, number: 14}   # D2 on B6
     filters: [delayed_on: 20ms]
   - platform: gpio
     id: remote_d
     name: Remote button D
-    pin: {mcp23xxx: expander, number: 12}   # D3 on B4
+    pin: {mcp23xxx: expander, number: 15}   # D3 on B7
     filters: [delayed_on: 20ms]

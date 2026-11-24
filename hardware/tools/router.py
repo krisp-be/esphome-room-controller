@@ -254,27 +254,38 @@ def route(board, verbose=True):
     iso = getattr(P, "ISOLATED", {}) or {}
     gnd_tracks = getattr(P, "GND_TRACKS", set())
     nets = {}
+    anchors = {}   # plane nets: pads that the plane reaches; GND_TRACKS pads are routed to the nearest one
     for fp in board.GetFootprints():
         for p in fp.Pads():
             n = p.GetNetname()
             if n in P.PLANE_NETS:
                 if (fp.GetReference(), p.GetNumber()) in gnd_tracks:
                     nets.setdefault(n, []).append(p)      # plane pads that the plane cannot reach
+                else:
+                    sure = getattr(P, "GND_ANCHORS", None)   # optional: only these pads count as on the main plane
+                    if sure is None or (fp.GetReference(), p.GetNumber()) in sure:
+                        anchors.setdefault(n, []).append(p)
             elif n:
                 nets.setdefault(n, []).append(p)
     order = sorted(nets, key=lambda n: (n in P.LAST, n not in P.PRIORITY, -P.WIDTHS.get(n, 0.3), len(nets[n])))
     failed = []
     for name in order:
         pads = nets[name]
-        if len(pads) < 2:
+        plane = name in P.PLANE_NETS and anchors.get(name)
+        if len(pads) < (1 if plane else 2):
             continue
         code = pads[0].GetNetCode()
         w = P.WIDTHS.get(name, P.DEFAULT_WIDTH)
         island = iso.get(name)
         free, via_ok, own = g.free(code, w, island)
         cells = [pad_cells(g, p) for p in pads]
-        tree = list(cells[0])
-        todo = list(range(1, len(pads)))
+        if plane:
+            # each listed pad gets its own track to the nearest plane-connected pad of the same net
+            tree = [c for p in anchors[name] for c in pad_cells(g, p)]
+            todo = list(range(len(pads)))
+        else:
+            tree = list(cells[0])
+            todo = list(range(1, len(pads)))
         netitem = board.FindNet(name)
         while todo:
             bj = np.array([c[1] for c in tree]); bi = np.array([c[2] for c in tree])

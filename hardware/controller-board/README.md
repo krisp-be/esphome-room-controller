@@ -46,7 +46,7 @@ MODULES header: 5V, 5V, 3V3, GND (relay module, other modules)
 | IN 1..5 | V, GND, SIG | presence (mmWave), PIR, buttons, any 3.3/5 V signal | supply jumper per input |
 | I2C | 3V3, GND, SDA, SCL | I²C sensors (humidity, VOC, light, …) | |
 | IO A / IO B | pin + GND pairs | door and drawer contacts, buttons, relay inputs | MCP23017, 3.3 V logic |
-| 433 MHz socket | VT, D3, D2, D1, D0, 3V3, GND | 4-channel 433 MHz receiver module | for battery wall switches |
+| 433 MHz socket | VT, D0, D1, D2, D3, 3V3, GND | 4-channel 433 MHz receiver module | for battery wall switches |
 | MODULES | 5V, 5V, 3V3, GND | power for a relay module and other modules | |
 
 ### Fan channels
@@ -74,7 +74,7 @@ ESPHome uses the GPIO numbers.
 | A2 | 3 | not used (strapping pin) |
 
 MCP23017 pins in ESPHome: A0..A7 = 0..7, B0..B7 = 8..15.
-433 MHz receiver: D0 = B7 (15), D1 = B6 (14), D2 = B5 (13), D3 = B4 (12), VT = B3 (11).
+433 MHz receiver: D0 = B4 (12), D1 = B5 (13), D2 = B6 (14), D3 = B7 (15), VT = B3 (11).
 
 ## Limits
 - ESP32-S3: 4 RMT channels, so **4 data lines** at most. One line can drive many strips in
@@ -139,13 +139,16 @@ Order it together with the [LED distribution board](../led-distribution-board) t
 shipping cost.
 
 ### Check before ordering
-These footprints are assumptions. Measure the real parts and adjust `build.py` (custom
-footprints) or `parts.py`, then rebuild:
-1. **Mini560-PRO** (U2, U3, U8): placeholder 30 × 18 mm, standing, IN+/GND at the top, OUT/GND at
-   the bottom, holes at 2.54 mm. Mount the modules on pin headers: tracks run underneath.
-2. **HLK-1D0505A** (U5, U10): 4 pins at 2.54 mm in the order GND, VIN, 0V, +VO.
-3. **433 MHz receiver** (U6): pin order VT, D3, D2, D1, D0, VDD, GND (pad 1 = square, west).
-4. **Fuse holder** (F1–F5): Stelvio-Kontek PTF78 footprint, pins 22.6 mm apart.
+Measured on the real parts (2026-11): Mini560-PRO (33 x 18.2 mm, connections in the corners), 433 MHz
+receiver pin order, fuse holder (flat legs, 22.6 mm, holes enlarged to 1.8 mm), screw terminals,
+capacitors and the Nano row spacing. Still to confirm:
+1. **Mini560-PRO** (U2, U3, U8): IN+ and OUT+ along the **same** long edge (assumed). Mount each module
+   on 4 single header pins, one per connection: tracks run underneath.
+2. **Hi-Link isolated 5 V** (U5, U10; delivered as B0505S-1WR3): pin order confirmed (dot = pin 1,
+   diode test): 1 −Vin, 2 +Vin, 3 −Vout, 4 +Vout. Pin 1 (dot, left when you read the text) goes in the
+   square pad.
+3. **433 MHz receiver** (U6): the module is 28.3 mm wide; its four unpinned pads (ST, LED, GND, ANT)
+   overhang to the west, past VT. Solder a 17.3 cm wire to ANT if the module has no antenna.
 
 ### Isolation
 The isolated corners (silkscreen ISOLATED 1/2) have their own GND planes, at least 2 mm away

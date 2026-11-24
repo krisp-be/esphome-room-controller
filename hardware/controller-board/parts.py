@@ -56,6 +56,8 @@ C_CER = ("Capacitor_THT", "C_Disc_D5.0mm_W2.5mm_P5.00mm")
 SCHOTTKY = ("Diode_THT", "D_DO-41_SOD81_P7.62mm_Horizontal")      # 1N5819 or BAT85 (DO-41 holes fit both), pad 1 = cathode
 FLYBACK = ("Diode_THT", "D_DO-41_SOD81_P7.62mm_Horizontal")       # 1N5819, pad 1 = cathode
 FUSE = ("Fuse", "Fuseholder_Cylinder-5x20mm_Stelvio-Kontek_PTF78_Horizontal_Open")
+# Bigger holes: the fuse holder has flat legs of 1.4 x 0.45 mm (1.47 mm diagonal).
+DRILLS = {FUSE[1]: 1.8}
 MINI560 = ("", "MINI560")                                          # custom footprint in build.py
 HDR = "Connector_PinHeader_2.54mm"
 
@@ -138,11 +140,11 @@ PARTS = {
     "C2": ("Capacitor_THT", "CP_Radial_D6.3mm_P2.50mm", 12.5, 21.0, 90, {"1": "+24V", "2": "GND"}, "47u/50V"),
     "C3": (*C_CER, 6.0, 30.0, 0, {"1": "+24V", "2": "GND"}, "100n"),
     # --- step-down modules, standing on pin headers (custom footprint, MEASURE the pads); position = top right
-    "U3": (*MINI560, 69.0, 45.0, -90, {"1": "+24V", "2": "GND", "3": "+5V", "4": "GND"}, "Mini560 5V"),
-    "U2": (*MINI560, 87.5, 45.0, -90, {"1": "+24V", "2": "GND", "3": "+9V", "4": "GND"}, "Mini560 9V"),
+    "U3": (*MINI560, 68.5, 45.0, -90, {"1": "+24V", "2": "GND", "3": "+5V", "4": "GND"}, "Mini560 5V"),
+    "U2": (*MINI560, 87.25, 45.0, -90, {"1": "+24V", "2": "GND", "3": "+9V", "4": "GND"}, "Mini560 9V"),
     "U8": (*MINI560, 106.0, 45.0, -90, {"1": "+24V", "2": "GND", "3": "+12V", "4": "GND"}, "Mini560 12V"),
-    "C4": ("Capacitor_THT", "CP_Radial_D8.0mm_P3.50mm", 46.5, 80.5, 0, {"1": "+5V", "2": "GND"}, "220u/25V"),
-    "C7": ("Capacitor_THT", "CP_Radial_D8.0mm_P3.50mm", 89.0, 79.5, 0, {"1": "+12V", "2": "GND"}, "220u/25V"),
+    "C4": ("Capacitor_THT", "CP_Radial_D8.0mm_P3.50mm", 46.5, 83.0, 0, {"1": "+5V", "2": "GND"}, "220u/25V"),
+    "C7": ("Capacitor_THT", "CP_Radial_D8.0mm_P3.50mm", 89.0, 83.0, 0, {"1": "+12V", "2": "GND"}, "220u/25V"),
     # --- level shifter 74AHCT125 (DIP-14 in a socket)
     "U4": ("Package_DIP", "DIP-14_W7.62mm_Socket", 5.0, 56.0, 90, {
         "1": "GND", "2": "D_S1", "3": "BUF1", "4": "GND", "5": "D_S2", "6": "BUF2", "7": "GND",
@@ -163,7 +165,8 @@ PARTS = {
     "U9": ("Package_DIP", "DIP-28_W7.62mm_Socket", MCP_X, MCP_Y, 90, MCP, "MCP23017"),
     "J18": (HDR, "PinHeader_2x08_P2.54mm_Vertical", MCP_X, 46.0, 90, HDR_A, "IO A"),
     "J12": (HDR, "PinHeader_2x08_P2.54mm_Vertical", MCP_X + 7 * 2.54, 71.0, -90, HDR_B, "IO B"),
-    # 433 MHz receiver between the MCP and IO B: pad 1..7 = VT, D3, D2, D1, D0, VDD, GND on B3..B7
+    # 433 MHz receiver between the MCP and IO B (measured pin order): pad 1..7 = VT, D0, D1, D2, D3, VDD, GND
+    # on B3..B7. The module is 28.3 mm wide: its 4 unpinned pads (ST, LED, GND, ANT) overhang past VT (west).
     "U6": ("Connector_PinSocket_2.54mm", "PinSocket_1x07_P2.54mm_Vertical", MCP_X + 3 * 2.54, 66.0, 90,
            {"1": "IOB3", "2": "IOB4", "3": "IOB5", "4": "IOB6", "5": "IOB7", "6": "+3V3", "7": "GND"}, "433 MHz receiver"),
     "C8": (*C_CER, 139.0, 64.0, 0, {"1": "+3V3", "2": "GND"}, "100n"),
@@ -207,9 +210,16 @@ PLANE_NETS = {n for n, _, _ in PLANES}
 PLANE_THERMAL = True   # thermal reliefs: easier hand soldering on the GND planes
 
 # Routed first (short connections in a tight area); GND pads the plane cannot reach get a track.
-PRIORITY = ["IOB0", "IOB1", "IOB2", "IOB3", "IOB4", "IOB5", "IOB6", "IOB7", "D_S1", "D_S2", "D_S3", "D_S4", "BUF1", "BUF2", "BUF3", "BUF4"]
-LAST = ["GND"]
-GND_TRACKS = {("U4", n) for n in ("1", "4", "7", "10", "13")} | {("C5", "2"), ("U5", "1"), ("U10", "1"), ("C7", "2"), ("U1A", "12"), ("U1B", "14")}
+PRIORITY = ["GND", "IOB0", "IOB1", "IOB2", "IOB3", "IOB4", "IOB5", "IOB6", "IOB7", "D_S1", "D_S2", "D_S3", "D_S4", "BUF1", "BUF2", "BUF3", "BUF4"]
+LAST = []
+GND_TRACKS = {("U4", n) for n in ("1", "4", "7", "10", "13")} | {("C5", "2"), ("U5", "1"), ("U10", "1"), ("C7", "2"), ("U1A", "12"), ("U1B", "14")} | {(u, n) for u in ("U2", "U3", "U8") for n in ("2", "4")}
+# GND pads that surely sit on the main plane: GND_TRACKS pads are routed to the nearest of these
+# (not to a pad that may sit in a loose piece of plane).
+GND_ANCHORS = ({("J1", "2"), ("J11", "2"), ("C1", "2"), ("C2", "2"), ("C3", "2"), ("U9", "10"), ("U6", "7"), ("J7", "4")}
+               | {(f"J{i}", "2") for i in (2, 3, 4, 5, 19, 20, 22, 23, 24, 25, 26)}
+               | {(f"Q{k}", "3") for k in range(1, 5)} | {(f"R{k}", "1") for k in range(24, 28)}
+               | {(f"R{k}", "2") for k in range(10, 14)}
+               | {(j, str(n)) for j in ("J18", "J12") for n in range(2, 17, 2)})
 # Areas where only GND may run (between the pin rows of U4, for the OE pins).
 GND_CHANNELS = []
 
@@ -232,7 +242,7 @@ TEXTS = [
     ("SDA SCL", 25.5, S_Y - 5.4, 0, 0.7),
     ("IO A: A7 ............ A0", 120.9, 49.3, 0, 0.8),
     ("IO B: B0 ............ B7", 120.9, 76.8, 0, 0.8),
-    ("433: VT D3 D2 D1 D0 3V3 GND", 127.5, 68.4, 0, 0.6),
+    ("433: VT D0 D1 D2 D3 3V3 GND", 127.5, 68.4, 0, 0.6),
     ("MODULES 5V 5V 3V3 GND", 142.8, 73.4, 0, 0.6),
     ("ESPHOME ROOM CONTROLLER v2", 15.5, 89.0, 0, 1.1),
     ("24 V - Nano ESP32 - 2026-11", 15.5, 91.6, 0, 0.8),
