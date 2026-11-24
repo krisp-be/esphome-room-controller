@@ -1,0 +1,22 @@
+# Output on the I/O expander headers (IO A: A0..A7, IO B: B0..B2), for example the IN pin of a
+# relay module (power the module from the 5V/GND pins of the MODULES header).
+# Use a relay module that switches on a HIGH input ("high-active") and works with 3.3 V logic.
+#
+#   fan_relay: !include
+#     file: ../components/expander-output.yaml
+#     vars: {pin: A0, id: fan_relay, name: Fan mains relay}
+defaults:
+  inverted: "false"
+  restore_mode: ALWAYS_OFF
+
+switch:
+  - platform: gpio
+    id: ${id}
+    name: ${name}
+    pin:
+      mcp23xxx: expander
+      number: ${ "AB".index(pin[0]) * 8 + (pin[1:] | int) }
+      inverted: ${inverted}
+      mode:
+        output: true
+    restore_mode: ${restore_mode}

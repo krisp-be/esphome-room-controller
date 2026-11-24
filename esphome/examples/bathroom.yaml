@@ -1,0 +1,203 @@
+# Bathroom: two extraction fans driven by humidity, a mirror light on presence and a cove light.
+#
+# What is connected to the controller board:
+#   FAN 1    extraction fan shower (mains EC fan with PWM input, e.g. Ruck EM..EC 02): PWM 1 kHz,
+#            GND bridge OPEN (isolated)
+#   FAN 2    extraction fan toilet, same type, GND bridge OPEN
+#   IO A0    relay module channel 1: mains of fan 1
+#   IO A1    relay module channel 2: mains of fan 2
+#   STRIP 1  mirror light: 24 V FCOB CCT strip (WS2811), red channel = warm white, green = cold white
+#   STRIP 2  ceiling cove: 24 V WS2814 RGBW
+#   IN 1     LD2410C presence sensor (OUT pin, supply jumper on 5 V)
+#   I2C      SHT40 temperature/humidity sensor, away from the shower spray
+#   433 MHz  battery wall switch: button A = mirror light, button B = fans at full speed for a while
+#
+# Behaviour:
+#   - The fans always run at a low base speed (adjustable, 0 = off).
+#   - When the humidity rises clearly above its normal level (after a shower), both fans run at full
+#     speed until the humidity is nearly back to normal. "Normal" is a slow moving average, so the
+#     system adapts to the seasons by itself; above an absolute limit the fans boost anyway.
+#   - Button B: full speed for a set time.
+#   - Presence switches the mirror light on; 5 minutes after the last presence it goes off.
+
+substitutions:
+  name: bathroom
+  friendly_name: Bathroom
+
+packages:
+  board: !include ../common/board.yaml
+
+  fan_1: !include
+    file: ../components/fan.yaml
+    vars: {channel: 1, id: fan_1, name: Extraction fan shower, frequency: 1000Hz, min_power: "0.1"}
+  fan_2: !include
+    file: ../components/fan.yaml
+    vars: {channel: 2, id: fan_2, name: Extraction fan toilet, frequency: 1000Hz, min_power: "0.1"}
+  fan_1_relay: !include
+    file: ../components/expander-output.yaml
+    vars: {pin: A0, id: fan_1_relay, name: Fan shower mains}
+  fan_2_relay: !include
+    file: ../components/expander-output.yaml
+    vars: {pin: A1, id: fan_2_relay, name: Fan toilet mains}
+
+  mirror: !include
+    file: ../components/led-strip.yaml
+    vars: {channel: 1, id: mirror, name: Mirror light, chipset: WS2812, rgb_order: RGB, num_leds: 8}
+  cove: !include
+    file: ../components/led-strip.yaml
+    vars: {channel: 2, id: cove, name: Cove light, chipset: SK6812, is_rgbw: "true", num_leds: 40}
+
+  presence: !include
+    file: ../components/input.yaml
+    vars: {channel: 1, id: presence, name: Presence, device_class: occupancy, delayed_off: 5min}
+
+  remote: !include ../components/rf433.yaml
+
+# --- settings, adjustable on the web page --------------------------------------------------------
+number:
+  - platform: template
+    id: base_speed
+    name: Fan base speed
+    entity_category: config
+    unit_of_measurement: "%"
+    min_value: 0
+    max_value: 100
+    step: 5
+    initial_value: 20
+    optimistic: true
+    restore_value: true
+    on_value:
+      - script.execute: update_fans
+  - platform: template
+    id: humidity_rise
+    name: Humidity rise for boost
+    entity_category: config
+    unit_of_measurement: "%"
+    min_value: 3
+    max_value: 30
+    step: 1
+    initial_value: 8
+    optimistic: true
+    restore_value: true
+  - platform: template
+    id: humidity_max
+    name: Humidity limit for boost
+    entity_category: config
+    unit_of_measurement: "%"
+    min_value: 50
+    max_value: 95
+    step: 1
+    initial_value: 75
+    optimistic: true
+    restore_value: true
+  - platform: template
+    id: boost_minutes
+    name: Boost time (button)
+    entity_category: config
+    unit_of_measurement: min
+    min_value: 5
+    max_value: 60
+    step: 5
+    initial_value: 15
+    optimistic: true
+    restore_value: true
+
+globals:
+  - id: humid
+    type: bool
+    initial_value: "false"
+
+# --- humidity ------------------------------------------------------------------------------------
+sensor:
+  - platform: sht4x
+    update_interval: 30s
+    temperature:
+      name: Temperature
+    humidity:
+      id: humidity
+      name: Humidity
+      on_value:
+        - lambda: |-
+            const float base = id(humidity_baseline).state;
+            if (std::isnan(base)) return;
+            if (x > base + id(humidity_rise).state || x > id(humidity_max).state) {
+              id(humid) = true;
+            } else if (x < base + 3.0f && x < id(humidity_max).state - 3.0f) {
+              id(humid) = false;
+            }
+        - script.execute: update_fans
+  # The "normal" humidity: a slow average that hardly moves during a shower.
+  - platform: copy
+    source_id: humidity
+    id: humidity_baseline
+    name: Humidity baseline
+    entity_category: diagnostic
+    filters:
+      - exponential_moving_average:
+          alpha: 0.005
+          send_every: 1
+
+# --- fans ----------------------------------------------------------------------------------------
+script:
+  # Decide the speed: button boost > humidity boost > base speed.
+  - id: update_fans
+    then:
+      - if:
+          condition:
+            script.is_running: manual_boost
+          then:
+            - script.execute: {id: set_fans, speed: 100}
+          else:
+            - script.execute:
+                id: set_fans
+                speed: !lambda |-
+                  return id(humid) ? 100 : (int) id(base_speed).state;
+
+  - id: set_fans
+    parameters:
+      speed: int
+    then:
+      - if:
+          condition:
+            lambda: return speed > 0;
+          then:
+            - switch.turn_on: fan_1_relay
+            - switch.turn_on: fan_2_relay
+            - fan.turn_on:
+                id: fan_1
+                speed: !lambda return speed;
+            - fan.turn_on:
+                id: fan_2
+                speed: !lambda return speed;
+          else:
+            - fan.turn_off: fan_1
+            - fan.turn_off: fan_2
+            - switch.turn_off: fan_1_relay
+            - switch.turn_off: fan_2_relay
+
+  - id: manual_boost
+    mode: restart
+    then:
+      - script.execute: {id: set_fans, speed: 100}
+      - delay: !lambda return id(boost_minutes).state * 60 * 1000;
+      - script.execute: update_fans
+
+esphome:
+  on_boot:
+    priority: -100
+    then:
+      - script.execute: update_fans
+
+# --- lights and buttons --------------------------------------------------------------------------
+binary_sensor:
+  - id: !extend presence
+    on_press:
+      - light.turn_on: mirror
+    on_release:
+      - light.turn_off: mirror
+  - id: !extend remote_a
+    on_press:
+      - light.toggle: mirror
+  - id: !extend remote_b
+    on_press:
+      - script.execute: manual_boost

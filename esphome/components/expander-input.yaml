@@ -1,0 +1,28 @@
+# Slow input on the I/O expander headers (IO A: A0..A7, IO B: B0..B2), each pin next to a GND pin.
+# Ideal for door and drawer reed contacts and push buttons.
+#
+#   door_1: !include
+#     file: ../components/expander-input.yaml
+#     vars: {pin: A0, id: door_1, name: Door 1}
+#
+# Default: contact between the pin and GND, internal pull-up, ON when the contact is OPEN.
+# A reed contact that is closed while the door is closed therefore reports ON = door open.
+defaults:
+  device_class: door
+  pullup: "true"
+  inverted: "false"
+
+binary_sensor:
+  - platform: gpio
+    id: ${id}
+    name: ${name}
+    device_class: ${device_class}
+    pin:
+      mcp23xxx: expander
+      number: ${ "AB".index(pin[0]) * 8 + (pin[1:] | int) }
+      inverted: ${inverted}
+      mode:
+        input: true
+        pullup: ${pullup}
+    filters:
+      - delayed_on_off: 50ms

@@ -1,0 +1,23 @@
+# Dimmable 24 V load on one of the 4 MOSFET outputs (terminals OUT 1..4: +24 and -),
+# for example a plain (non-addressable) white LED strip.
+#
+#   vanity: !include
+#     file: ../components/dimmer.yaml
+#     vars: {channel: 1, id: vanity_light, name: Vanity light}
+defaults:
+  frequency: 2000Hz
+  restore_mode: RESTORE_DEFAULT_OFF
+
+output:
+  - platform: ledc
+    id: ${id}_pwm
+    pin: ${ ["GPIO21", "GPIO38", "GPIO47", "GPIO1"][channel - 1] }
+    frequency: ${frequency}
+
+light:
+  - platform: monochromatic
+    id: ${id}
+    name: ${name}
+    output: ${id}_pwm
+    restore_mode: ${restore_mode}
+    default_transition_length: 500ms

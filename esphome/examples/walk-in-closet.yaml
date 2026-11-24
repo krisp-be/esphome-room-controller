@@ -1,0 +1,154 @@
+# Walk-in closet: lit wardrobe columns that switch on when a door opens, a ceiling cove light on
+# presence, and a ventilated shoe cabinet.
+#
+# What is connected to the controller board:
+#   STRIP 1  wardrobe interior: ONE data line through 6 columns via an LED distribution board
+#            (ports 1..6, bridges fitted on ports 7 and 8). 24 V WS2811 COB strip, 12 pixels per column.
+#            Each column is a separate light (partition), so it can be switched on its own.
+#   STRIP 2  ceiling cove: 24 V WS2814 RGBW, 30 pixels
+#   OUT 1    mirror: plain (non-addressable) 24 V white LED strip, dimmable
+#   IO A0-A5 reed contacts of wardrobe doors 1..6 (contact between the pin and the GND pin next to it;
+#            closed when the door is closed)
+#   IN 1     LD2410C presence sensor (OUT pin, supply jumper on 5 V)
+#   IN 2     push button for the mirror light (between SIG and GND)
+#   FAN 1    2 x 120 mm 12 V computer fans in parallel in the shoe cabinet: PWM 25 kHz,
+#            GND bridge FITTED, 12 V and GND from the FAN 1 terminal, tach wire of one fan to TACH
+#   I2C      SHT40 temperature/humidity sensor in the shoe cabinet
+#
+# Behaviour:
+#   - Open a wardrobe door: that column lights up. Close it: off. Left open: off after 15 minutes.
+#   - Somebody in the closet: the cove light is on; 2 minutes after the last presence it goes off.
+#   - The mirror button toggles the mirror light.
+#   - Shoe cabinet: the fans run when the humidity is above the limit, and air the cabinet for
+#     10 minutes every 2 hours anyway.
+
+substitutions:
+  name: walk-in-closet
+  friendly_name: Walk-in closet
+
+packages:
+  board: !include ../common/board.yaml
+
+  wardrobe: !include
+    file: ../components/led-strip.yaml
+    vars: {channel: 1, id: wardrobe_strip, name: Wardrobe (all), chipset: WS2812, rgb_order: RGB, num_leds: 72, internal: "true"}
+  cove: !include
+    file: ../components/led-strip.yaml
+    vars: {channel: 2, id: cove, name: Cove light, chipset: SK6812, is_rgbw: "true", num_leds: 30}
+  mirror: !include
+    file: ../components/dimmer.yaml
+    vars: {channel: 1, id: mirror, name: Mirror light}
+
+  door_1: !include {file: ../components/door-light.yaml, vars: {pin: A0, id: door_1, name: Wardrobe door 1, light: column_1}}
+  door_2: !include {file: ../components/door-light.yaml, vars: {pin: A1, id: door_2, name: Wardrobe door 2, light: column_2}}
+  door_3: !include {file: ../components/door-light.yaml, vars: {pin: A2, id: door_3, name: Wardrobe door 3, light: column_3}}
+  door_4: !include {file: ../components/door-light.yaml, vars: {pin: A3, id: door_4, name: Wardrobe door 4, light: column_4}}
+  door_5: !include {file: ../components/door-light.yaml, vars: {pin: A4, id: door_5, name: Wardrobe door 5, light: column_5}}
+  door_6: !include {file: ../components/door-light.yaml, vars: {pin: A5, id: door_6, name: Wardrobe door 6, light: column_6}}
+
+  presence: !include
+    file: ../components/input.yaml
+    vars: {channel: 1, id: presence, name: Presence, device_class: occupancy, delayed_off: 2min}
+  mirror_button: !include
+    file: ../components/input.yaml
+    vars: {channel: 2, id: mirror_button, name: Mirror button, device_class: "", pullup: "true", inverted: "true"}
+
+  shoe_fan: !include
+    file: ../components/fan.yaml
+    vars: {channel: 1, id: shoe_fan, name: Shoe cabinet fans, frequency: 25000Hz, min_power: "0.2"}
+  shoe_fan_rpm: !include
+    file: ../components/fan-tach.yaml
+    vars: {channel: 1, id: shoe_fan_rpm, name: Shoe cabinet fan speed}
+
+# --- one light per wardrobe column, all on the same data line --------------------------------------
+light:
+  - {platform: partition, id: column_1, name: Wardrobe column 1, segments: [{id: wardrobe_strip, from: 0, to: 11}]}
+  - {platform: partition, id: column_2, name: Wardrobe column 2, segments: [{id: wardrobe_strip, from: 12, to: 23}]}
+  - {platform: partition, id: column_3, name: Wardrobe column 3, segments: [{id: wardrobe_strip, from: 24, to: 35}]}
+  - {platform: partition, id: column_4, name: Wardrobe column 4, segments: [{id: wardrobe_strip, from: 36, to: 47}]}
+  - {platform: partition, id: column_5, name: Wardrobe column 5, segments: [{id: wardrobe_strip, from: 48, to: 59}]}
+  - {platform: partition, id: column_6, name: Wardrobe column 6, segments: [{id: wardrobe_strip, from: 60, to: 71}]}
+
+binary_sensor:
+  - id: !extend presence
+    on_press:
+      - light.turn_on: cove
+    on_release:
+      - light.turn_off: cove
+  - id: !extend mirror_button
+    on_press:
+      - light.toggle: mirror
+
+# --- shoe cabinet ventilation ----------------------------------------------------------------------
+sensor:
+  - platform: sht4x
+    update_interval: 60s
+    temperature:
+      name: Shoe cabinet temperature
+    humidity:
+      id: shoe_humidity
+      name: Shoe cabinet humidity
+
+number:
+  - platform: template
+    id: humidity_limit
+    name: Shoe cabinet humidity limit
+    entity_category: config
+    unit_of_measurement: "%"
+    min_value: 40
+    max_value: 90
+    step: 1
+    initial_value: 65
+    optimistic: true
+    restore_value: true
+  - platform: template
+    id: fan_speed_dry
+    name: Shoe fan speed when humid
+    entity_category: config
+    unit_of_measurement: "%"
+    min_value: 20
+    max_value: 100
+    step: 5
+    initial_value: 70
+    optimistic: true
+    restore_value: true
+
+interval:
+  - interval: 1min
+    then:
+      - if:
+          condition:
+            lambda: return id(shoe_humidity).state > id(humidity_limit).state;
+          then:
+            - fan.turn_on:
+                id: shoe_fan
+                speed: !lambda return (int) id(fan_speed_dry).state;
+          else:
+            # 5 % hysteresis, and do not interrupt a running airing cycle
+            - if:
+                condition:
+                  and:
+                    - fan.is_on: shoe_fan
+                    - not:
+                        script.is_running: airing
+                    - lambda: return id(shoe_humidity).state < id(humidity_limit).state - 5;
+                then:
+                  - fan.turn_off: shoe_fan
+  - interval: 2h
+    then:
+      - script.execute: airing
+
+script:
+  - id: airing
+    then:
+      - if:
+          condition:
+            fan.is_off: shoe_fan
+          then:
+            - fan.turn_on: {id: shoe_fan, speed: 40}
+            - delay: 10min
+            - if:
+                condition:
+                  lambda: return !(id(shoe_humidity).state > id(humidity_limit).state);
+                then:
+                  - fan.turn_off: shoe_fan

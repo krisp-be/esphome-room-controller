@@ -1,0 +1,36 @@
+# 433 MHz receiver module (4 outputs D0..D3, learning type, e.g. the receiver from the
+# Tinytronics "433MHz RF remote with receiver" set) in the 7-pin socket next to the I/O expander.
+# Every output is ON while a button of a paired remote is pressed (momentary mode, no solder bridges).
+#
+#   remote: !include ../components/rf433.yaml
+#
+# This creates binary sensors remote_a .. remote_d. Act on them in your config, e.g.:
+#
+#   binary_sensor:
+#     - id: !extend remote_a
+#       on_press:
+#         - light.toggle: nail_light
+#
+# Pairing: hold the button on the receiver about 2 s until its LED lights, then press a remote button.
+# Which button ends up on which output can differ per batch: check it in the log or on the web page.
+binary_sensor:
+  - platform: gpio
+    id: remote_a
+    name: Remote button A
+    pin: {mcp23xxx: expander, number: 15}   # D0 on B7
+    filters: [delayed_on: 20ms]
+  - platform: gpio
+    id: remote_b
+    name: Remote button B
+    pin: {mcp23xxx: expander, number: 14}   # D1 on B6
+    filters: [delayed_on: 20ms]
+  - platform: gpio
+    id: remote_c
+    name: Remote button C
+    pin: {mcp23xxx: expander, number: 13}   # D2 on B5
+    filters: [delayed_on: 20ms]
+  - platform: gpio
+    id: remote_d
+    name: Remote button D
+    pin: {mcp23xxx: expander, number: 12}   # D3 on B4
+    filters: [delayed_on: 20ms]

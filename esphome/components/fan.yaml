@@ -1,0 +1,31 @@
+# PWM fan on one of the 2 fan channels (terminals FAN 1/2 PWM + GNDiso, and 12V/GND/TACH).
+#
+#   fan_extract: !include
+#     file: ../components/fan.yaml
+#     vars: {channel: 1, id: extract_fan, name: Extraction fan, frequency: 1000Hz}
+#
+# frequency: 25000Hz for 4-pin computer fans (fit the GND bridge on the board),
+#            1000Hz for mains EC fans with a PWM input such as Ruck EM..EC 02 (keep the bridge open).
+# The fast optocoupler on the board inverts the signal; that is handled here.
+# A mains fan also needs a relay for real on/off: see expander-output.yaml and the examples.
+defaults:
+  frequency: 25000Hz
+  min_power: "0.15"      # lowest duty cycle at which the fan still turns
+  restore_mode: RESTORE_DEFAULT_OFF
+
+output:
+  - platform: ledc
+    id: ${id}_pwm
+    pin: ${ ["GPIO9", "GPIO10"][channel - 1] }
+    frequency: ${frequency}
+    inverted: true
+    min_power: ${min_power}
+    zero_means_zero: true
+
+fan:
+  - platform: speed
+    id: ${id}
+    name: ${name}
+    output: ${id}_pwm
+    speed_count: 100
+    restore_mode: ${restore_mode}

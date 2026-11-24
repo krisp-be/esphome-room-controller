@@ -1,0 +1,29 @@
+# Sensor on one of the 5 fast inputs (terminals IN 1..5: V, GND, SIG).
+# The jumper next to each terminal selects the sensor supply V: 3.3 V or 5 V.
+# The signal is clamped to 3.3 V on the board, so 5 V sensors are fine.
+#
+#   presence: !include
+#     file: ../components/input.yaml
+#     vars: {channel: 1, id: presence, name: Presence, device_class: occupancy}
+#
+# For a dry contact (switch, reed contact) between SIG and GND use pullup: "true" and inverted: "true".
+defaults:
+  device_class: occupancy
+  pullup: "false"
+  inverted: "false"
+  delayed_off: 0s
+
+binary_sensor:
+  - platform: gpio
+    id: ${id}
+    name: ${name}
+    device_class: ${device_class}
+    pin:
+      number: ${ ["GPIO4", "GPIO13", "GPIO14", "GPIO44", "GPIO43"][channel - 1] }
+      inverted: ${inverted}
+      mode:
+        input: true
+        pullup: ${pullup}
+    filters:
+      - delayed_on: 50ms
+      - delayed_off: ${delayed_off}

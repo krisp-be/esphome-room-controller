@@ -1,0 +1,30 @@
+# Addressable LED strip on one of the 4 strip outputs (terminals STRIP 1..4).
+#
+#   strip_shelves: !include
+#     file: ../components/led-strip.yaml
+#     vars: {channel: 1, id: shelves, name: Shelves, num_leds: 30}
+#
+# num_leds counts pixels (driver ICs), not LEDs: a 24 V strip often has 1 IC per 3 or 6 LEDs.
+# Split one output into separately controlled zones with an ESPHome `partition` light
+# (see examples/walk-in-closet.yaml). The ESP32-S3 has 4 RMT channels, so rmt_symbols is
+# kept at the minimum (48) to allow all 4 outputs at the same time.
+defaults:
+  chipset: WS2812        # WS2812 timing also works for WS2811 and WS2815; SK6812 for most RGBW strips (WS2814)
+  rgb_order: GRB
+  is_rgbw: "false"
+  restore_mode: RESTORE_DEFAULT_OFF
+  internal: "false"      # "true" hides the whole strip when you only use its partitions
+
+light:
+  - platform: esp32_rmt_led_strip
+    id: ${id}
+    name: ${name}
+    internal: ${internal}
+    pin: ${ ["GPIO8", "GPIO7", "GPIO6", "GPIO5"][channel - 1] }
+    chipset: ${chipset}
+    rgb_order: ${rgb_order}
+    is_rgbw: ${is_rgbw}
+    num_leds: ${num_leds}
+    rmt_symbols: 48
+    restore_mode: ${restore_mode}
+    default_transition_length: 500ms

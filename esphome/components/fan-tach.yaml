@@ -1,0 +1,24 @@
+# Speed (RPM) of a fan with a tachometer wire on the TACH pin of fan channel 1 or 2.
+#
+#   fan_tach: !include
+#     file: ../components/fan-tach.yaml
+#     vars: {channel: 1, id: shoe_fan_rpm, name: Shoe cabinet fan speed}
+#
+# Computer fans give 2 pulses per revolution. With two fans in parallel, connect only one tach wire.
+defaults:
+  pulses_per_revolution: "2"
+
+sensor:
+  - platform: pulse_counter
+    id: ${id}
+    name: ${name}
+    pin:
+      number: ${ ["GPIO17", "GPIO18"][channel - 1] }
+      mode:
+        input: true
+        pullup: true
+    unit_of_measurement: rpm
+    accuracy_decimals: 0
+    update_interval: 10s
+    filters:
+      - multiply: ${ 1.0 / (pulses_per_revolution | float) }

@@ -1,0 +1,38 @@
+# Door (or drawer) contact on the I/O expander that switches a light: on when opened, off when
+# closed, and off anyway after a timeout if the door is left open.
+#
+#   door_1: !include
+#     file: ../components/door-light.yaml
+#     vars: {pin: A0, id: door_1, name: Wardrobe door 1, light: wardrobe_1}
+#
+# `light` is the id of any light, typically one segment (partition) of an LED strip.
+# The light keeps the colour and brightness it had last time; set them once on the web page.
+defaults:
+  timeout: 15min
+
+binary_sensor:
+  - platform: gpio
+    id: ${id}
+    name: ${name}
+    device_class: door
+    pin:
+      mcp23xxx: expander
+      number: ${ "AB".index(pin[0]) * 8 + (pin[1:] | int) }
+      mode:
+        input: true
+        pullup: true
+    filters:
+      - delayed_on_off: 50ms
+    on_press:
+      - light.turn_on: ${light}
+      - script.execute: ${id}_timeout
+    on_release:
+      - script.stop: ${id}_timeout
+      - light.turn_off: ${light}
+
+script:
+  - id: ${id}_timeout
+    mode: restart
+    then:
+      - delay: ${timeout}
+      - light.turn_off: ${light}

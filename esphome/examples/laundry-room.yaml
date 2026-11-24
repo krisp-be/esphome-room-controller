@@ -1,0 +1,245 @@
+# Laundry room: 3D-printer cabinet, filament storage and a small nail table with an extraction fan.
+#
+# What is connected to the controller board:
+#   STRIP 1  AMS shelf 1            24 V WS2814 RGBW, 0.5 m, via a pogo connector on the pull-out shelf
+#   STRIP 2  AMS shelf 2            same
+#   STRIP 3  filament compartment   same
+#   STRIP 4  nail table             24 V FCOB CCT strip (WS2811), 1 m: red channel = warm white,
+#                                   green channel = cold white
+#   FAN 1    Ruck EM 100L EC 02 extraction fan: PWM 1 kHz, GND bridge OPEN (isolated)
+#   IO A0    relay module, switches the mains of the fan
+#   IN 1     LD2410C presence sensor under the nail table (OUT pin, supply jumper on 5 V)
+#   IN 2     AM312 PIR motion sensor in the printer cabinet (supply jumper on 3.3 V)
+#   I2C      SGP40 VOC sensor in the exhaust duct, before the fan
+#   433 MHz  battery wall switch: button A = nail table light, button B = printer cabinet light
+#
+# Behaviour (no Home Assistant or Wi-Fi needed):
+#   - Button A toggles the nail table light. The fan follows that light: light on = fan on,
+#     light off = fan keeps running slowly for a while (run-on), then stops.
+#   - Nobody at the nail table for a while: the light goes off (and the run-on starts).
+#   - A lot of solvent vapour (VOC) while working: the fan runs at full speed.
+#   - Button B toggles the printer cabinet lights; they go off after a while without motion.
+#   - Speeds and times can be changed on the web page of the board (http://laundry-room.local).
+
+substitutions:
+  name: laundry-room
+  friendly_name: Laundry room
+
+packages:
+  board: !include ../common/board.yaml
+
+  shelf_1: !include
+    file: ../components/led-strip.yaml
+    vars: {channel: 1, id: shelf_1, name: AMS shelf 1, chipset: SK6812, rgb_order: GRB, is_rgbw: "true", num_leds: 5}
+  shelf_2: !include
+    file: ../components/led-strip.yaml
+    vars: {channel: 2, id: shelf_2, name: AMS shelf 2, chipset: SK6812, rgb_order: GRB, is_rgbw: "true", num_leds: 5}
+  filament: !include
+    file: ../components/led-strip.yaml
+    vars: {channel: 3, id: filament, name: Filament compartment, chipset: SK6812, rgb_order: GRB, is_rgbw: "true", num_leds: 5}
+  nail_light: !include
+    file: ../components/led-strip.yaml
+    vars: {channel: 4, id: nail_light, name: Nail table light, chipset: WS2812, rgb_order: RGB, num_leds: 10}
+
+  fan: !include
+    file: ../components/fan.yaml
+    vars: {channel: 1, id: extract_fan, name: Extraction fan, frequency: 1000Hz, min_power: "0.1"}
+  fan_relay: !include
+    file: ../components/expander-output.yaml
+    vars: {pin: A0, id: fan_relay, name: Extraction fan mains}
+
+  presence: !include
+    file: ../components/input.yaml
+    vars: {channel: 1, id: nail_presence, name: Nail table presence, device_class: occupancy}
+  cabinet_motion: !include
+    file: ../components/input.yaml
+    vars: {channel: 2, id: cabinet_motion, name: Printer cabinet motion, device_class: motion}
+
+  remote: !include ../components/rf433.yaml
+
+# --- settings, adjustable on the web page --------------------------------------------------------
+number:
+  - platform: template
+    id: fan_speed_working
+    name: Fan speed while working
+    entity_category: config
+    unit_of_measurement: "%"
+    min_value: 10
+    max_value: 100
+    step: 5
+    initial_value: 60
+    optimistic: true
+    restore_value: true
+  - platform: template
+    id: fan_speed_runon
+    name: Fan speed during run-on
+    entity_category: config
+    unit_of_measurement: "%"
+    min_value: 10
+    max_value: 100
+    step: 5
+    initial_value: 20
+    optimistic: true
+    restore_value: true
+  - platform: template
+    id: runon_minutes
+    name: Fan run-on time
+    entity_category: config
+    unit_of_measurement: min
+    min_value: 0
+    max_value: 60
+    step: 1
+    initial_value: 10
+    optimistic: true
+    restore_value: true
+  - platform: template
+    id: nail_auto_off_minutes
+    name: Nail light off after no presence
+    entity_category: config
+    unit_of_measurement: min
+    min_value: 1
+    max_value: 60
+    step: 1
+    initial_value: 10
+    optimistic: true
+    restore_value: true
+  - platform: template
+    id: cabinet_auto_off_minutes
+    name: Cabinet light off after no motion
+    entity_category: config
+    unit_of_measurement: min
+    min_value: 1
+    max_value: 120
+    step: 1
+    initial_value: 10
+    optimistic: true
+    restore_value: true
+  - platform: template
+    id: voc_boost_level
+    name: VOC index for full fan speed
+    entity_category: config
+    min_value: 100
+    max_value: 500
+    step: 10
+    initial_value: 200
+    optimistic: true
+    restore_value: true
+
+# --- sensors -------------------------------------------------------------------------------------
+sensor:
+  - platform: sgp4x
+    update_interval: 10s
+    voc:
+      id: voc_index
+      name: VOC index
+      on_value:
+        - if:
+            condition:
+              and:
+                - light.is_on: nail_light
+                - lambda: return x >= id(voc_boost_level).state;
+            then:
+              - fan.turn_on: {id: extract_fan, speed: 100}
+            else:
+              # vapour gone again: back to the normal working speed
+              - if:
+                  condition:
+                    and:
+                      - light.is_on: nail_light
+                      - lambda: return x < id(voc_boost_level).state - 50;
+                      - lambda: return id(extract_fan).speed == 100;
+                  then:
+                    - script.execute: fan_working
+
+# --- lights: the fan follows the nail table light; cabinet lights switch off by themselves -------
+light:
+  - id: !extend shelf_1
+    on_turn_on: [script.execute: cabinet_auto_off]
+  - id: !extend shelf_2
+    on_turn_on: [script.execute: cabinet_auto_off]
+  - id: !extend filament
+    on_turn_on: [script.execute: cabinet_auto_off]
+  - id: !extend nail_light
+    on_turn_on:
+      - script.execute: fan_working
+      - if:
+          condition:
+            binary_sensor.is_off: nail_presence
+          then:
+            - script.execute: nail_auto_off
+    on_turn_off:
+      - script.stop: nail_auto_off
+      - script.execute: fan_runon
+
+binary_sensor:
+  - id: !extend remote_a
+    on_press:
+      - light.toggle: nail_light
+  - id: !extend nail_presence
+    on_press:
+      - script.stop: nail_auto_off
+    on_release:
+      - if:
+          condition:
+            light.is_on: nail_light
+          then:
+            - script.execute: nail_auto_off
+  - id: !extend remote_b
+    on_press:
+      - if:
+          condition:
+            or:
+              - light.is_on: shelf_1
+              - light.is_on: shelf_2
+              - light.is_on: filament
+          then:
+            - script.execute: cabinet_off
+          else:
+            - light.turn_on: shelf_1
+            - light.turn_on: shelf_2
+            - light.turn_on: filament
+  - id: !extend cabinet_motion
+    on_press:
+      - if:
+          condition:
+            script.is_running: cabinet_auto_off
+          then:
+            - script.execute: cabinet_auto_off   # restart the countdown
+
+script:
+  - id: fan_working
+    then:
+      - script.stop: fan_runon
+      - switch.turn_on: fan_relay
+      - fan.turn_on:
+          id: extract_fan
+          speed: !lambda return (int) id(fan_speed_working).state;
+
+  - id: fan_runon
+    mode: restart
+    then:
+      - fan.turn_on:
+          id: extract_fan
+          speed: !lambda return (int) id(fan_speed_runon).state;
+      - delay: !lambda return id(runon_minutes).state * 60 * 1000;
+      - fan.turn_off: extract_fan
+      - switch.turn_off: fan_relay
+
+  - id: nail_auto_off
+    mode: restart
+    then:
+      - delay: !lambda return id(nail_auto_off_minutes).state * 60 * 1000;
+      - light.turn_off: nail_light
+
+  - id: cabinet_auto_off
+    mode: restart
+    then:
+      - delay: !lambda return id(cabinet_auto_off_minutes).state * 60 * 1000;
+      - script.execute: cabinet_off
+
+  - id: cabinet_off
+    then:
+      - script.stop: cabinet_auto_off
+      - light.turn_off: shelf_1
+      - light.turn_off: shelf_2
+      - light.turn_off: filament

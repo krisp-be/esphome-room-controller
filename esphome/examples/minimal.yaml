@@ -1,0 +1,13 @@
+# Smallest useful configuration: the board plus one LED strip. Start your own room from here:
+# copy this file, rename it, and add components from ../components (each file explains its options).
+
+substitutions:
+  name: my-room
+  friendly_name: My room
+
+packages:
+  board: !include ../common/board.yaml
+
+  strip: !include
+    file: ../components/led-strip.yaml
+    vars: {channel: 1, id: main_strip, name: LED strip, num_leds: 30}

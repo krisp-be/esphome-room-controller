@@ -1,0 +1,15 @@
+# On/off 24 V load on one of the 4 MOSFET outputs (terminals OUT 1..4: +24 and -),
+# for example a solenoid, a small 24 V fan or the 12 V feed of computer fans through a relay.
+#
+#   lock: !include
+#     file: ../components/switched-output.yaml
+#     vars: {channel: 2, id: cabinet_lock, name: Cabinet lock}
+defaults:
+  restore_mode: ALWAYS_OFF
+
+switch:
+  - platform: gpio
+    id: ${id}
+    name: ${name}
+    pin: ${ ["GPIO21", "GPIO38", "GPIO47", "GPIO1"][channel - 1] }
+    restore_mode: ${restore_mode}
